@@ -508,7 +508,7 @@ class Swarm:
     
     
     #************** Sampling algorithms ****************
-    def ForestFire(self, n=10, p=0.7, s=1, overlap=False):
+    def FFD(self, n=10, p=0.7, s=1, overlap=False):
         """
         Function to perform graph sampling by the Forest Fire algorithm. 
         In the initial phase, n nodes are selected as "fire sources". Then, the fire spreads to the neighbors with a probability of p.
@@ -539,7 +539,9 @@ class Swarm:
                 if free_neighbors: # At least one unassigned neighbor
                     nodes = bn.proba_walk(p, i, overlap) # Next node(s)
                 else:
-                    nodes = [self.random_jump(s, overlap)] # If no neighbor, perform random jump in the graph
+                    if free_nodes == []:
+                        break
+                    nodes = [self.random_jump(free_nodes)] # If no neighbor, perform random jump in the graph
                 for n in nodes:
                     n.set_group(bn.group)
                     swarms[bn.group].add_node(n) 
@@ -548,7 +550,7 @@ class Swarm:
             burning_nodes = next_nodes
         return swarms
     
-    def MDRW(self, n=10, s=1, overlap=False):
+    def MIRW(self, n=10, s=1, overlap=False):
         """
         Function to perform graph sampling by the Multi-Dimensional Random Walk algorithm.
         In the initial phase, n nodes are selected as sources. Then they all perform random walks in parallel (see help(Node.random_walk) for
@@ -576,13 +578,16 @@ class Swarm:
                 if free_neighbors: # At least one unassigned neighbor
                     n_j = n_i.random_walk(i, overlap) # Next node
                 else:
-                    n_j = self.random_jump(s, overlap) # If no neighbor, perform random jump in the graph
+                    if free_nodes == []:
+                        break
+                    n_j = self.random_jump(free_nodes) # If no neighbor, perform random jump in the graph
                 n_j.set_group(n_i.group)
                 swarms[k].add_node(n_j) 
                 free_nodes.remove(n_j)
         return swarms
     
-    def RNS(self, clist=range(10), s=1):
+
+    def RND(self, n , s=1):
         """
         Function to perform graph sampling by the Random Node Sampling algorithm.
         Each node choses a random group ID from the list given as parameter.
@@ -596,27 +601,24 @@ class Swarm:
         """
         swarms = {}
         for i, node in enumerate(self.nodes):
-            node.random_group(clist, s*i)
-        for i in clist: # Separate into swarms
+            node.random_group(range(n), s*i)
+        for i in range(n): # Separate into swarms
             swarms[i] = Swarm(self.connection_range,
                                 nodes=[n for n in self.nodes if n.group==i])
         return swarms
-            
-    def random_jump(self, s=1, overlap=False):
+    
+    def random_jump(self,search_list, s=1):
         """
         Function to choose a new node in the graph by performing a random jump.
 
         Args:
             s (int, optional): the random seed. Defaults to 1.
-            overlap (bool, optional): if True, node groups are allowed to overlap. Defaults to False.
+            
 
         Returns:
             Node: the randomly chosen node.
         """
         seed(s)
-        search_list = self.nodes
-        if not overlap: # Restrain the search list to unassigned nodes
-            search_list = [n for n in self.nodes if n.group==-1]
         return choice(search_list)
     
 
