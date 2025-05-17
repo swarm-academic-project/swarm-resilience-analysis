@@ -1,6 +1,7 @@
 import networkx as nx 
 from itertools import combinations
 from networkx.algorithms.simple_paths import all_simple_paths
+from functools import lru_cache
 
 def flow_robustness(G: nx.Graph, divided=False, group_dict=None) -> float:
     """
@@ -182,26 +183,10 @@ print("Efficacité réseau (complet):", network_efficiency(G2)) # proche de 1
 import networkx as nx
 from networkx.algorithms.simple_paths import all_simple_paths
 
+import networkx as nx
+from functools import lru_cache
+
 def path_redundancy(G: nx.Graph, max_extra_length: int = 1, divided=False, group_dict=None) -> float:
-    """
-    Calcule la redondance moyenne des chemins :
-    - Cas global : sur toutes les paires connectées.
-    - Cas divisé : seulement entre les paires du même groupe.
-
-    Un chemin alternatif est défini comme :
-    - un chemin simple (sans cycle)
-    - de longueur <= (plus court chemin + max_extra_length)
-    - et différent du plus court chemin
-
-    Args:
-        G (nx.Graph): le graphe
-        max_extra_length (int): tolérance sur la longueur
-        divided (bool): True pour ne considérer que les paires intra-groupe
-        group_dict (dict): {node: group_id}, requis si divided=True
-
-    Returns:
-        float: redondance moyenne (nombre de chemins alternatifs par paire)
-    """
     nodes = list(G.nodes)
     n = len(nodes)
     if n < 2:
@@ -210,7 +195,6 @@ def path_redundancy(G: nx.Graph, max_extra_length: int = 1, divided=False, group
     total_alternatives = 0
     num_pairs = 0
 
-    # Définir les paires à tester
     if not divided:
         pairs = [(u, v) for u in nodes for v in nodes if u != v]
     else:
@@ -220,22 +204,38 @@ def path_redundancy(G: nx.Graph, max_extra_length: int = 1, divided=False, group
             (u, v) for u in nodes for v in nodes
             if u != v and group_dict.get(u) == group_dict.get(v)
         ]
+
+    # Pré-calcul des plus courts chemins
     shortest_lengths = dict(nx.all_pairs_shortest_path_length(G))
-    
+    shortest_paths = dict(nx.all_pairs_shortest_path(G))
+
+    @lru_cache(maxsize=None)
+    def count_paths(u, v, max_len, visited):
+        if u == v:
+            return 1
+        if max_len == 0:
+            return 0
+        total = 0
+        for neighbor in G.neighbors(u):
+            if neighbor in visited:
+                continue
+            total += count_paths(
+                neighbor, v, max_len - 1, visited + (neighbor,)
+            )
+        return total
+
     for u, v in pairs:
         if v not in shortest_lengths.get(u, {}):
-            continue  # Pas de chemin = pas de redondance
+            continue
+        shortest_len = shortest_lengths[u][v]
+        max_len = shortest_len + max_extra_length
 
-        shortest_length = shortest_lengths[u][v]
-        max_length = shortest_length + max_extra_length
+        # Compter tous les chemins simples (longueur > shortest)
+        total_paths = 0
+        for l in range(shortest_len + 1, max_len + 1):
+            total_paths += count_paths(u, v, l, (u,))
 
-        # Utiliser un générateur pour éviter l'explosion mémoire
-        count = 0
-        for path in nx.all_simple_paths(G, u, v, cutoff=max_length):
-            if len(path) - 1 > shortest_length:
-                count += 1
-
-        total_alternatives += count
+        total_alternatives += total_paths
         num_pairs += 1
 
     return total_alternatives / num_pairs if num_pairs > 0 else 0.0
@@ -363,13 +363,6 @@ def critical_nodes(G, epsilon=0.01, divided=False, group_dict=None):
     critical = [node for node, value in BC.items() if value >= epsilon]
     return len(critical) * 100 / len(G.nodes)
     
-def critical_nodes(G, epsilon=0.01, divided=False, group_dict=None):
-    """
-    Retourne le pourcentage de nœuds critiques (BCt(i) ≥ ε)
-    """
-    BC = node_criticality(G, divided=divided, group_dict=group_dict)
-    critical = [node for node, value in BC.items() if value >= epsilon]
-    return len(critical) * 100 / len(G.nodes)
 
 """G = nx.erdos_renyi_graph(10, 0.3, seed=42)
 BCt = node_criticality(G)
