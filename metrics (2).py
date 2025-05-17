@@ -327,13 +327,6 @@ def node_criticality(G: nx.Graph, divided=False, group_dict=None):
         return BC
 
     
-def critical_nodes(G, epsilon=0.01, divided=False, group_dict=None):
-    """
-    Retourne le pourcentage de nœuds critiques (BCt(i) ≥ ε)
-    """
-    BC = node_criticality(G, divided=divided, group_dict=group_dict)
-    critical = [node for node, value in BC.items() if value >= epsilon]
-    return len(critical) * 100 / len(G.nodes)
     
 def critical_nodes(G, epsilon=1e-4, divided=False, group_dict=None):
     """
